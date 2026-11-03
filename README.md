@@ -34,6 +34,29 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 
 要求：JDK 17+、Android SDK（compileSdk 36）、minSdk 27。
 
+## 触控映射
+
+游戏只认鼠标，壳把触摸翻译成鼠标事件（`MouseGameWebView`），并屏蔽
+`GameCanvas` 上的原生触摸，避免同一操作产生两套事件：
+
+| 手势 | 映射 |
+|---|---|
+| 单指按下 / 拖动 / 抬起 | 左键按下 → 移动 → 抬起（放置植物、选卡、拖拽） |
+| 双指上下滑 | 滚轮（地图缩放/滚动） |
+| 双指轻点 | 右键单击 |
+
+两个容易踩的点（都已处理，改动前请先读）：
+
+1. **按下前必须先发 `mousemove`**。游戏自己维护光标，只被 `mousemove`
+   更新；只发 `mousedown` 会让操作落在上一次光标位置（放植物、点僵尸
+   会"跳到上一个点"）。
+2. **合成事件要逐帧派发**（`window.__gdInput`，16ms 一个）。mousemove 与
+   mousedown 同一帧到达时，游戏 update() 里缓存的光标还没刷新，表现就是
+   "第一次点不生效，第二次才在上次位置生效"。
+
+调试：页面 console 会转发到 logcat（`adb logcat -s WebViewConsole`）；
+需要 chrome://inspect 时用 `-PwebviewDebug=true` 构建（默认关闭）。
+
 ## 发布
 
 本仓库的 Releases 只放**壳本身的构建产物**（不含游戏资源）。
