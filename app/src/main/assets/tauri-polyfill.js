@@ -180,6 +180,17 @@
                 return Promise.resolve(null);
             }
 
+            // 启动恢复门禁：null = 没有恢复日志，正常启动（官方壳同名命令）
+            case 'cloud_journal_read':
+            case 'cloud_open':
+            case 'cloud_startup_result':
+            case 'update_macos_menu':
+                return Promise.resolve(null);
+
+            // 每日关卡深链（Android 无深链，返回 null 让监听器安静退出）
+            case 'plugin:deep-link|get_current':
+                return Promise.resolve(null);
+
             case 'plugin:opener|open_path':
                 try { bridge.openDataFolder(); } catch (e) { /* ignore */ }
                 return Promise.resolve(null);
@@ -291,27 +302,11 @@
         emit: function () { return Promise.resolve(); }
     };
 
-    // Electron 检测分支的替身：游戏优先用 __TAURI__，缺失的场合回落到这里
-    if (!window.electronAPI) {
-        window.electronAPI = {
-            saveSaveFile: function (name, content) {
-                if (!bridge.saveTextFile) return Promise.resolve({ ok: false });
-                var ok = bridge.saveTextFile(String(name || 'save.json'), String(content || ''));
-                return Promise.resolve({ ok: !!ok });
-            },
-            openSaveFile: function () {
-                if (!bridge.openTextFile) return Promise.resolve({ ok: false });
-                var text = bridge.openTextFile();
-                return Promise.resolve(text == null ? null : { ok: true, content: text });
-            },
-            center: function () {}, fullScreen: function () {},
-            isFullScreen: function () { return false; },
-            quit: function () { try { bridge.quitApp && bridge.quitApp(); } catch (e) {} },
-            captureScreenshot: function () { return Promise.resolve({ ok: false, error: 'unsupported' }); },
-            onWindowFocused: function () { return function () {}; },
-            onWindowUnfocused: function () { return function () {}; }
-        };
-    }
+    // 不要伪造 window.electronAPI：游戏的 ElectronAPI 静态类会直接调
+    // electronAPI.window() / openUrl() / getMassageSync() 等一整套方法，
+    // 缺任何一个都会抛 "n.window is not a function" 并把启动打断。
+    // 官方 Tauri 客户端本就没有 electronAPI，全部调用点是 `null==(n=s())||...`
+    // 短路成空操作，这里保持一致。
 
     console.log(TAG, 'installed, appData =', appRoot());
 })();
