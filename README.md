@@ -36,8 +36,7 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 
 ## 发布
 
-- 本仓库的 Releases 只放**壳本身的构建产物**（不含游戏资源的版本）。
-- 含完整资源（游戏 + 音频模组）的安装包在独立的私有仓库存放与分发。
+本仓库的 Releases 只放**壳本身的构建产物**（不含游戏资源）。
 
 ## 许可
 
