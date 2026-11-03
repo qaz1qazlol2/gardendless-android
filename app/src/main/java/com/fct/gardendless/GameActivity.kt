@@ -329,7 +329,7 @@ class GameActivity : AppCompatActivity() {
                     }
                 }
                 /**
-                 * 注入 gp-next shim，并在游戏启动后屏蔽 GameCanvas 上的触摸事件
+                 * 注入 gp-next shim，并屏蔽 GameCanvas 上的触摸事件
                  * （触摸手势统一由 MouseGameWebView 转换为鼠标事件处理）。
                  * 页面每次加载都会重新注入，shim 内部以 __gdHooked 保证幂等。
                  */
@@ -340,27 +340,32 @@ class GameActivity : AppCompatActivity() {
                     if (gpNextShimJs.isNotEmpty()) view?.evaluateJavascript(gpNextShimJs, null)
                     val js = """
 (function() {
-    const target = document.getElementById("GameCanvas");
-    if (!target) return;
-
-    target.addEventListener("touchstart", (e) => {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-    }, { capture: true, passive: false });
-    target.addEventListener("touchmove", (e) => {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-    }, { capture: true, passive: false });
-    target.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-    }, { capture: true, passive: false });
+    if (window.__gdTouchBlocked) return;
+    function attach() {
+        var target = document.getElementById("GameCanvas");
+        if (!target) return false;
+        if (target.__gdTouchBlocked) { window.__gdTouchBlocked = true; return true; }
+        target.__gdTouchBlocked = true;
+        // 触摸手势全部由 MouseGameWebView 转成鼠标事件，这里把原生触摸彻底拦掉，
+        // 否则同一操作会同时产生 touch 与 mouse 两套事件。
+        ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(function (t) {
+            target.addEventListener(t, function (e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+            }, { capture: true, passive: false });
+        });
+        window.__gdTouchBlocked = true;
+        return true;
+    }
+    if (attach()) return;
+    // canvas 还没创建：轮询直到挂上（最多 15 秒），比固定延时更可靠
+    var tries = 0;
+    var timer = setInterval(function () {
+        if (attach() || ++tries > 60) clearInterval(timer);
+    }, 250);
 })();
                         """.trimIndent()
-                    // 延迟到 GameCanvas 创建完成后再挂载监听
-                    view?.postDelayed({
-                        view.evaluateJavascript(js, null)
-                    }, 8000)
+                    view?.evaluateJavascript(js, null)
                 }
 
                 override fun shouldInterceptRequest(

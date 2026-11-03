@@ -34,6 +34,8 @@ class MouseGameWebView @JvmOverloads constructor(
     private val moveThreshold = 20f
     private var maxTouches = 0
     private var isTouching = false
+    private var lastX = 0f
+    private var lastY = 0f
 
     // 获取屏幕密度，用于将物理像素转换为CSS像素
     private val density = context.resources.displayMetrics.density
@@ -53,10 +55,17 @@ class MouseGameWebView @JvmOverloads constructor(
                     isTouching = true
                     val dx = event.x
                     val dy = event.y
+                    lastX = dx
+                    lastY = dy
 
-                    if (isTouching && maxTouches == 1) {
-                        // 左键按下（JS 事件，button 0）
-                        injectJsMouseEvent(dx, dy, "mousedown", 0)
+                    if (maxTouches == 1) {
+                        // 关键：先把光标移到落点。
+                        // 游戏（PvZ2 本体逻辑）用最近一次 mousemove 维护自己的光标，
+                        // 只有 mousedown 而不先 mousemove 的话，放置植物 / 选卡 / 点僵尸
+                        // 会按"上一次光标位置"命中——也就是手指抬起来看着点中了，
+                        // 实际作用在上一处。
+                        injectJsMouseEvent(dx, dy, "mousemove", 0, 0)
+                        injectJsMouseEvent(dx, dy, "mousedown", 0, 1)
                         isDragging = true
                     }
                     return super.dispatchTouchEvent(event)
@@ -65,7 +74,10 @@ class MouseGameWebView @JvmOverloads constructor(
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (pointerCount == 2) {
-                    // 进入双指手势，取消左键拖拽
+                    // 进入双指手势：先把可能按住的左键松开，否则会一直处于拖拽状态
+                    if (isDragging) {
+                        injectJsMouseEvent(lastX, lastY, "mouseup", 0, 0)
+                    }
                     isDragging = false
                     hasMovedEnough = false
                     val cx = (event.getX(0) + event.getX(1)) / 2
@@ -82,6 +94,8 @@ class MouseGameWebView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 // 移动统一使用 native 事件，以保证流畅度
                 if (pointerCount == 1 && isDragging) {
+                    lastX = event.x
+                    lastY = event.y
                     injectMouseEventAt(event.x, event.y, MotionEvent.ACTION_MOVE, MotionEvent.BUTTON_PRIMARY)
                 } else if (pointerCount == 2) {
                     val cx = (event.getX(0) + event.getX(1)) / 2
@@ -98,28 +112,39 @@ class MouseGameWebView @JvmOverloads constructor(
                 }
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
-                if (action == MotionEvent.ACTION_UP) {
-                    isTouching = false
-                    mainHandler.removeCallbacksAndMessages(null)
+            MotionEvent.ACTION_UP -> {
+                isTouching = false
+                mainHandler.removeCallbacksAndMessages(null)
 
-                    if (maxTouches == 1 && isDragging) {
-                        // 左键抬起（JS 事件）
-                        injectJsMouseEvent(event.x, event.y, "mouseup", 0)
-                        maxTouches = 0
-                        isDragging = false
-                        hasMovedEnough = false
-                        return super.dispatchTouchEvent(event)
-                    }
-                    else if (maxTouches == 2 && !hasMovedEnough) {
-                        // 双指轻点：右键点击
-                        injectRightClickAt(touchStartCenterX, touchStartCenterY)
-                    }
-
-                    maxTouches = 0
+                if (maxTouches == 1 && isDragging) {
+                    // 抬起前再把光标对齐到最终落点（拖动后位置会变），然后松开左键
+                    injectJsMouseEvent(event.x, event.y, "mousemove", 0, 0)
+                    injectJsMouseEvent(event.x, event.y, "mouseup", 0, 0)
                     isDragging = false
-                    hasMovedEnough = false
+                } else if (maxTouches == 2 && !hasMovedEnough) {
+                    // 双指轻点：右键点击（先定位光标再按右键）
+                    injectJsMouseEvent(touchStartCenterX, touchStartCenterY, "mousemove", 0, 0)
+                    injectRightClickAt(touchStartCenterX, touchStartCenterY)
+                } else if (isDragging) {
+                    // 兜底：无论走哪条分支都不要把左键留在按下状态
+                    injectJsMouseEvent(event.x, event.y, "mouseup", 0, 0)
+                    isDragging = false
                 }
+
+                maxTouches = 0
+                hasMovedEnough = false
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                // 手势被系统打断（来电、通知栏等）时也要释放按键
+                if (isDragging) {
+                    injectJsMouseEvent(lastX, lastY, "mouseup", 0, 0)
+                }
+                isDragging = false
+                isTouching = false
+                hasMovedEnough = false
+                maxTouches = 0
+                mainHandler.removeCallbacksAndMessages(null)
             }
         }
         return true
@@ -133,7 +158,13 @@ class MouseGameWebView @JvmOverloads constructor(
      * @param type 事件类型，"mousedown" 或 "mouseup"
      * @param button 按键：0=左键，2=右键
      */
-    private fun injectJsMouseEvent(x: Float, y: Float, type: String, button: Int) {
+    private fun injectJsMouseEvent(
+        x: Float,
+        y: Float,
+        type: String,
+        button: Int,
+        buttons: Int = if (type == "mouseup") 0 else if (button == 2) 2 else 1
+    ) {
         // 将物理坐标转换为 CSS 坐标
         val cssX = x / density
         val cssY = y / density
@@ -150,7 +181,8 @@ class MouseGameWebView @JvmOverloads constructor(
                     screenY: $y,
                     clientX: $cssX,
                     clientY: $cssY,
-                    button: $button
+                    button: $button,
+                    buttons: $buttons
                 });
                 element.dispatchEvent(ev);
             })();
