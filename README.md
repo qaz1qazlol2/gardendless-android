@@ -23,11 +23,9 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 
 ## 构建
 
-1. 准备游戏包：
-   ```bash
-   tools/make-assets-zip.sh /path/to/webroot
-   # 产出 app/src/main/assets/pvzge_web-master.zip（内部 pvzge_web-master/docs/...）
-   ```
+1. 准备游戏包：自行制作 `app/src/main/assets/pvzge_web-master.zip`
+   （内部路径必须是 `pvzge_web-master/docs/...`，详见
+   [docs/INTEGRATION.md](docs/INTEGRATION.md)）
 2. （可选）签名：`cp keystore.properties.example keystore.properties` 并填入自有密钥
 3. 构建：
    ```bash

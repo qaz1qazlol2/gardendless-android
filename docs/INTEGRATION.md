@@ -12,11 +12,6 @@
 壳内的路径是**写死**的（`File(filesDir, "pvzge_web-master/docs")`），
 换包名/换结构需同步改 `GameActivity`。
 
-生成 zip：
-
-```bash
-tools/make-assets-zip.sh /path/to/webroot
-```
 
 ## 2. 页面 origin 与存储
 
@@ -70,18 +65,3 @@ onPageStarted → tauri-polyfill.js → gdnext-shim.js → 游戏脚本
 `window.audioEngine` 由游戏包自带的 `assets/game-*.js`（gp-next 入口）创建：
 fetch `audio/manifest.json` → Web Audio 播放 `/audio/<name>.mp3`。
 全部走 AssetLoader，**不需要壳提供音频能力**；只要 zip 内的 `audio/` 完整即可。
-
-## 5. 与闭源仓的同步
-
-```
-闭源仓（私有）：游戏 webroot（各音乐分支）+ 本壳的构建脚本
-   │  1) git fetch 开源壳（本仓库）
-   │  2) tools/make-assets-zip.sh <webroot>
-   │  3) ./gradlew :app:assembleRelease
-   ▼
-APK（含完整资源）
-```
-
-- 开源仓只提交壳代码（`app/src`、gradle 配置、`assets/*.js`）
-- 资源、签名材料、APK 产物一律留在闭源仓
-- 上游更新：`tools/sync-upstream.sh`（fetch upstream 并显示待合并提交）
