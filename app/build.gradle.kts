@@ -32,11 +32,11 @@ android {
         targetSdk = 36
         // versionCode 同时是游戏包解压的版本键（GameActivity），每次发版递增。
         // ⚠️ 升级安装要求 versionCode >= 已装版本（上游 v0.15.0 = 13）。
-        // 版本约定：主版本跟随游戏包（0.16.8），后缀是本 fork 的壳修订号，
-        // 壳自身有行为改动时递增后缀与 versionCode。
-        // 允许构建期覆盖：./gradlew -PversionCode=21 -PversionName=0.16.8-r1
+        // 版本约定：versionName 跟随游戏包（0.16.8）；壳自身有改动时只递增
+        // versionCode（它同时是资源解压键），显示版本保持与游戏一致。
+        // 允许构建期覆盖：./gradlew -PversionCode=21 -PversionName=0.16.8
         versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 21
-        versionName = providers.gradleProperty("versionName").orNull ?: "0.16.8-r1"
+        versionName = providers.gradleProperty("versionName").orNull ?: "0.16.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
