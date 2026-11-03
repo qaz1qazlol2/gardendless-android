@@ -53,9 +53,14 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 2. **合成事件要逐帧派发**（`window.__gdInput`，16ms 一个）。mousemove 与
    mousedown 同一帧到达时，游戏 update() 里缓存的光标还没刷新，表现就是
    "第一次点不生效，第二次才在上次位置生效"。
+3. 合成点击带**命中判定**：落点被 gp-next 浮层（F9 徽标、面板）盖住时直接
+   丢弃。所以**面板打开期间游戏收不到触摸、面板本身正常响应**，这是预期
+   行为，不是 bug。
 
 调试：页面 console 会转发到 logcat（`adb logcat -s WebViewConsole`）；
 需要 chrome://inspect 时用 `-PwebviewDebug=true` 构建（默认关闭）。
+手动测试时**不要用 adb 返回键**关面板——那会触发壳的退出确认框，盖住
+WebView，看起来像"触摸全失效"；用面板右上角的关闭按钮。
 
 ## 发布
 
