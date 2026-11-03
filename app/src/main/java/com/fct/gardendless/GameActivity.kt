@@ -187,7 +187,13 @@ class GameActivity : AppCompatActivity() {
                 allowFileAccess = false
                 allowContentAccess = false
                 mediaPlaybackRequiresUserGesture = false
+                // 触摸事件现在会透传给页面（浮层按钮需要 touchend），
+                // 这里关掉缩放与惯性滚动，避免拖动游戏时页面跟着缩放/回弹
+                setSupportZoom(false)
+                builtInZoomControls = false
+                displayZoomControls = false
             }
+            webView.overScrollMode = android.view.View.OVER_SCROLL_NEVER
 
             // 网页到原生的桥。游戏运行在 Tauri polyfill 之上，其中两件事在 WebView 里会失效：
             // 全屏被实现为空函数；保存文件名使用 prompt 而 WebView 不响应。

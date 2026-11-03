@@ -68,7 +68,6 @@ class MouseGameWebView @JvmOverloads constructor(
                         injectJsMouseEvent(dx, dy, "mousedown", 0, 1)
                         isDragging = true
                     }
-                    return super.dispatchTouchEvent(event)
                 }
             }
 
@@ -147,7 +146,11 @@ class MouseGameWebView @JvmOverloads constructor(
                 mainHandler.removeCallbacksAndMessages(null)
             }
         }
-        return true
+
+        // 原始触摸事件必须继续派发给 WebView：gp-next 的浮层（F9 按钮等）是普通
+        // DOM 元素，靠 touchend/click 工作；游戏画布上的触摸已由页面里的 capture
+        // 监听拦掉，不会重复触发。
+        return super.dispatchTouchEvent(event)
     }
 
     /**
