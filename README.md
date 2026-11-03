@@ -12,6 +12,10 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 
 ## 与上游的差异
 
+基线：上游 **v0.15.0**（`0f1c040`，Support mods）。除下表列出的文件外，壳代码
+与其逐字节相同——`gdnext-shim.js`、`GameDocumentsProvider.kt`、
+`AspectRatioFrameLayout.kt` 均未改动，上游后续更新可直接合并。
+
 | 项 | 上游 | 本 fork |
 |---|---|---|
 | 游戏包来源 | 网页版 pvzge_web-master（自带 Tauri polyfill） | 官方桌面客户端解包（无 polyfill） |
