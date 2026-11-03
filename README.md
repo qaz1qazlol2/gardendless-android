@@ -46,3 +46,9 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 GPL-3.0（继承上游）。上游作者：Caten Hu / [Cateners](https://github.com/Cateners)。
 `gdnext-shim.js`、`MouseGameWebView` 等壳逻辑为上游代码；本项目新增
 `app/src/main/assets/tauri-polyfill.js` 并调整了注入顺序与构建配置。
+
+## 开发说明
+
+本项目的改造与实现（polyfill、注入接线、构建配置、文档与工具）由
+**DeepSeek 4.1 Flash** 与 **GLM 5.3 Flash** 辅助完成。
+
