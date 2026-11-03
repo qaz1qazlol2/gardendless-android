@@ -26,9 +26,10 @@ android {
         applicationId = "com.pvzge.mobile"
         minSdk = 27
         targetSdk = 36
-        // versionCode 同时是游戏包解压的版本键（GameActivity），每次发版递增
-        versionCode = 1
-        versionName = "0.16.8"
+        // versionCode 同时是游戏包解压的版本键（GameActivity），每次发版递增。
+        // 允许构建期覆盖（闭源仓按游戏包版本注入）：./gradlew -PversionCode=2 -PversionName=0.16.8
+        versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("versionName").orNull ?: "0.16.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
