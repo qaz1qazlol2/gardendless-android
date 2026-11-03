@@ -364,6 +364,49 @@ class GameActivity : AppCompatActivity() {
         if (attach() || ++tries > 60) clearInterval(timer);
     }, 250);
 })();
+
+/**
+ * 合成鼠标事件队列：一次派发一个，事件之间隔一帧（16ms）。
+ *
+ * 原因：游戏在 update() 里缓存光标位置，mousemove 与 mousedown 若在同一帧
+ * 到达，按下时读到的还是上一帧的坐标 —— 表现就是"点一下不生效，下次才在
+ * 上次的位置生效"。逐帧派发保证每次按下前光标都已经刷新过。
+ * 队列里第一个事件（通常是定位用的 mousemove）立即派发，不增加点击延迟。
+ */
+(function () {
+    if (window.__gdInput) return;
+    var q = [];
+    var running = false;
+
+    function dispatch(it) {
+        var el = document.getElementById("GameCanvas") || document.body;
+        if (!el) return;
+        try {
+            el.dispatchEvent(new MouseEvent(it.t, {
+                view: window,
+                bubbles: true,
+                cancelable: true,
+                screenX: it.sx,
+                screenY: it.sy,
+                clientX: it.x,
+                clientY: it.y,
+                button: it.b,
+                buttons: it.bs
+            }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function pump() {
+        if (!q.length) { running = false; return; }
+        dispatch(q.shift());
+        setTimeout(pump, 16);
+    }
+
+    window.__gdInput = function (t, x, y, sx, sy, b, bs) {
+        q.push({ t: t, x: x, y: y, sx: sx, sy: sy, b: b, bs: bs });
+        if (!running) { running = true; pump(); }
+    };
+})();
                         """.trimIndent()
                     view?.evaluateJavascript(js, null)
                 }

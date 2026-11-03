@@ -169,22 +169,22 @@ class MouseGameWebView @JvmOverloads constructor(
         val cssX = x / density
         val cssY = y / density
 
-        // 构建 JS 脚本
+        // 走页面里的逐帧队列（__gdInput）：每次按下前保证光标已刷新过；
+        // 队列缺失时退化为直接派发。
         val js = """
             (function() {
-                var element = document.getElementById("GameCanvas");
-                var ev = new MouseEvent('$type', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true,
-                    screenX: $x,
-                    screenY: $y,
-                    clientX: $cssX,
-                    clientY: $cssY,
-                    button: $button,
-                    buttons: $buttons
-                });
-                element.dispatchEvent(ev);
+                if (window.__gdInput) {
+                    window.__gdInput('$type', $cssX, $cssY, $x, $y, $button, $buttons);
+                    return;
+                }
+                var el = document.getElementById("GameCanvas");
+                if (!el) return;
+                el.dispatchEvent(new MouseEvent('$type', {
+                    view: window, bubbles: true, cancelable: true,
+                    screenX: $x, screenY: $y,
+                    clientX: $cssX, clientY: $cssY,
+                    button: $button, buttons: $buttons
+                }));
             })();
         """.trimIndent()
 
