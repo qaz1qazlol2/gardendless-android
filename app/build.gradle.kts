@@ -16,6 +16,9 @@ if (hasKeystore) {
 }
 
 android {
+    buildFeatures {
+        buildConfig = true
+    }
     namespace = "com.fct.gardendless"
     compileSdk {
         version = release(36)
@@ -34,6 +37,13 @@ android {
         versionName = providers.gradleProperty("versionName").orNull ?: "0.16.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // WebView 远程调试开关：-PwebviewDebug=true 时打开（诊断用，默认关）
+        buildConfigField(
+            "boolean",
+            "WEBVIEW_DEBUG",
+            (providers.gradleProperty("webviewDebug").orNull?.toBoolean() ?: false).toString()
+        )
     }
 
     if (hasKeystore) {

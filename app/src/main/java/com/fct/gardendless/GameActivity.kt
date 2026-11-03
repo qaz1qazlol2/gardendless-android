@@ -29,6 +29,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.*
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient.CustomViewCallback
 import android.widget.ProgressBar
 import android.widget.Toast
@@ -129,6 +130,11 @@ class GameActivity : AppCompatActivity() {
 
         /** 装配 WebView、AssetLoader、JS 桥与各回调，并加载游戏入口页 */
         fun setupWebview() {
+            // 远程调试走 chrome://inspect（构建期 -PwebviewDebug=true 打开）
+            if (BuildConfig.WEBVIEW_DEBUG) {
+                WebView.setWebContentsDebuggingEnabled(true)
+                Log.i(TAG, "WebView remote debugging enabled")
+            }
             webView = MouseGameWebView(this)
 
             // 黑底容器，负责 16:10 ~ 17:9 的比例适配与全屏切换
@@ -366,6 +372,18 @@ class GameActivity : AppCompatActivity() {
                 }
             }
             webView.webChromeClient = object : WebChromeClient() {
+                /**
+                 * 把页面控制台转发到 logcat（tag=WebViewConsole）。
+                 * WebView 默认不落 logcat，没有这条任何 JS 报错都看不见。
+                 */
+                override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
+                    Log.i(
+                        "WebViewConsole",
+                        "[${msg.messageLevel()}] ${msg.sourceId()}:${msg.lineNumber()} ${msg.message()}"
+                    )
+                    return true
+                }
+
                 override fun onShowFileChooser(
                     webView: WebView?,
                     filePathCallback: ValueCallback<Array<Uri>>?,
