@@ -39,6 +39,11 @@ onPageStarted → tauri-polyfill.js → gdnext-shim.js → 游戏脚本
 | 命令 | 实现 |
 |---|---|
 | `plugin:path\|resolve_directory` | 原生桥 `appDataRoot()`（filesDir） |
+| `plugin:path\|basename` / `dirname` | JS 侧字符串处理 |
+| `plugin:opener\|open_url` | `window.open` → WebViewClient 交系统浏览器 |
+| `plugin:image\|from_bytes` / `from_path` / `rgba` / `size` | 占位桩（图标空白，不崩溃） |
+| `save_text_file`（自定义命令） | 原生桥 `saveTextFile` → SAF 保存对话框（复用 `<a download>` 流程） |
+| `window.electronAPI` | 最小替身（导出/退出接到原生） |
 | `plugin:fs\|read_text_file` / `read_file` | fetch AssetLoader 虚拟路径（ArrayBuffer） |
 | `plugin:fs\|stat` / `lstat` | 原生桥 → JSON |
 | `plugin:fs\|read_dir` / `exists` / `mkdir` / `remove` | 原生桥 |
@@ -51,11 +56,11 @@ onPageStarted → tauri-polyfill.js → gdnext-shim.js → 游戏脚本
 
 **未实现（返回 null + 控制台告警，待按需补齐）**：
 
-- `plugin:dialog|save` / `open`、自定义 `save_text_file` / `open_text_file`
-  → 存档/键位的导入导出（上游走 `<a download>` + 文件选择器）
-- `plugin:image|*`（模组图标等）
+- `open_text_file`（存档/键位**导入**）——需要原生异步回传大文本，另行设计
+- `plugin:dialog|save` / `open` 的完整语义（导出已走 `save_text_file`）
 - `plugin:deep-link|*`（每日关卡深链）
 - 流式读（`fs|open`/`read`/`seek`/`fstat`/`ftruncate`）
+- `plugin:drpc|*`（0.15 版 Discord RPC，0.16.8 已改用自定义命令）
 
 补齐方式：在 `tauri-polyfill.js` 的 `handle()` 里加 case，必要时在
 `GameActivity` 的 `GardendlessBridge` 增加 `@JavascriptInterface` 方法。

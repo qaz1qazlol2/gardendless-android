@@ -245,6 +245,39 @@ class GameActivity : AppCompatActivity() {
                 fun openDataFolder() {
                     webView.post { openGpNextFolder() }
                 }
+
+                /**
+                 * 游戏在 Tauri 分支的存档/键位导出：invoke("save_text_file", {defaultName, content})。
+                 * 复用 <a download> 的 SAF 流程——先暂存内容，再在 UI 线程拉起保存对话框。
+                 * 返回 true 表示已受理；用户取消时内容被丢弃（与上游导出行为一致）。
+                 */
+                @JavascriptInterface
+                fun saveTextFile(name: String, content: String): Boolean {
+                    pendingExport = content.toByteArray(Charsets.UTF_8)
+                    pendingExportName = name.ifBlank { "save.json" }
+                    webView.post {
+                        val fileName = pendingExportName ?: "save.json"
+                        pendingExportName = null
+                        val type = mimeFromExtension(fileName) ?: "application/json"
+                        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                            this.type = type
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            putExtra(Intent.EXTRA_TITLE, fileName)
+                        }
+                        startActivityForResult(intent, EXPORT_SAVE_RESULT_CODE)
+                    }
+                    return true
+                }
+
+                /** 导入：暂未实现（需要异步回传大文本，另行设计），返回 null 让游戏走兜底路径 */
+                @JavascriptInterface
+                fun openTextFile(): String? = null
+
+                /** 退出应用（polyfill 的 window.close / electronAPI.quit 落地） */
+                @JavascriptInterface
+                fun quitApp() {
+                    webView.post { finish() }
+                }
             }, "GardendlessBridge")
 
             webView.setDownloadListener { url, _, contentDisposition, mimeType, _ ->

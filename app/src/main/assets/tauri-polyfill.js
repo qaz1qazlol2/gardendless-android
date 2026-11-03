@@ -54,6 +54,8 @@
     }
     function urlOf(p) { return ORIGIN + relPath(p); }
 
+    var placeholderRid = 0;
+
     // ── 回调表（@tauri-apps/api 的 transformCallback 契约）─────
     var nextCbId = 1;
     var callbacks = {};
@@ -114,6 +116,15 @@
             case 'plugin:path|resolve_directory':
                 return Promise.resolve(appRoot() || '/');
 
+            case 'plugin:path|basename':
+                return Promise.resolve(String((args && args.path) || '').split(/[\\/]/).pop() || '');
+
+            case 'plugin:path|dirname': {
+                var segs = String((args && args.path) || '').split(/[\\/]/);
+                segs.pop();
+                return Promise.resolve(segs.join('/'));
+            }
+
             case 'plugin:fs|read_text_file':
                 return readBytes(args && args.path, 'read_text_file');
             case 'plugin:fs|read_file':
@@ -173,6 +184,37 @@
                 try { bridge.openDataFolder(); } catch (e) { /* ignore */ }
                 return Promise.resolve(null);
 
+            case 'plugin:opener|open_url':
+                // 交给 WebViewClient.shouldOverrideUrlLoading 用系统浏览器打开
+                if (args && args.url) window.open(String(args.url), '_blank');
+                return Promise.resolve(null);
+
+            // 图像：返回占位 rid（模组图标等会显示为空白，但不影响功能）
+            case 'plugin:image|from_bytes':
+            case 'plugin:image|from_path':
+                return Promise.resolve({ rid: ++placeholderRid });
+            case 'plugin:image|rgba':
+                return Promise.resolve(new Uint8Array(4));
+            case 'plugin:image|size':
+                return Promise.resolve({ width: 64, height: 64 });
+
+            // 存档 / 键位导入导出：游戏在 Tauri 分支调用这两个自定义命令
+            case 'save_text_file': {
+                var dn = (args && args.defaultName) || 'save.json';
+                var ct = (args && args.content) || '';
+                if (!bridge.saveTextFile) { warn(cmd, 'not supported by native bridge yet'); return Promise.resolve(null); }
+                return Promise.resolve(!!bridge.saveTextFile(String(dn), String(ct)));
+            }
+            case 'open_text_file':
+                if (!bridge.openTextFile) { warn(cmd, 'not supported by native bridge yet'); return Promise.resolve(null); }
+                return Promise.resolve(bridge.openTextFile() || null);
+
+            case 'plugin:dialog|save': {
+                // 兜底：无原生保存对话框时返回 null，游戏会退回 <a download> 路径
+                if (!bridge.saveTextFile) return Promise.resolve(null);
+                return Promise.resolve(null);
+            }
+
             case 'plugin:window|set_fullscreen':
                 try { bridge.setFullscreen(!!(args && args.value)); } catch (e) { /* ignore */ }
                 return Promise.resolve(null);
@@ -181,8 +223,22 @@
                 return Promise.resolve(false);
             case 'plugin:window|is_maximized':
             case 'plugin:window|is_minimized':
-            case 'plugin:window|is_focused':
                 return Promise.resolve(false);
+            case 'plugin:window|is_focused':
+                return Promise.resolve(true);
+            case 'plugin:window|get_all_windows':
+                return Promise.resolve([{ label: 'main' }]);
+            case 'plugin:window|outer_size':
+                return Promise.resolve({ width: window.outerWidth || window.innerWidth, height: window.outerHeight || window.innerHeight });
+            case 'plugin:window|inner_position':
+            case 'plugin:window|outer_position':
+                return Promise.resolve({ x: window.screenX || 0, y: window.screenY || 0 });
+            case 'plugin:window|set_size':
+            case 'plugin:window|set_position':
+            case 'plugin:window|center':
+            case 'plugin:window|hide':
+            case 'plugin:window|show':
+                return Promise.resolve(null);
             case 'plugin:window|scale_factor':
                 return Promise.resolve(window.devicePixelRatio || 1);
             case 'plugin:window|inner_size':
@@ -234,6 +290,28 @@
         listen: function () { return Promise.resolve(function () {}); },
         emit: function () { return Promise.resolve(); }
     };
+
+    // Electron 检测分支的替身：游戏优先用 __TAURI__，缺失的场合回落到这里
+    if (!window.electronAPI) {
+        window.electronAPI = {
+            saveSaveFile: function (name, content) {
+                if (!bridge.saveTextFile) return Promise.resolve({ ok: false });
+                var ok = bridge.saveTextFile(String(name || 'save.json'), String(content || ''));
+                return Promise.resolve({ ok: !!ok });
+            },
+            openSaveFile: function () {
+                if (!bridge.openTextFile) return Promise.resolve({ ok: false });
+                var text = bridge.openTextFile();
+                return Promise.resolve(text == null ? null : { ok: true, content: text });
+            },
+            center: function () {}, fullScreen: function () {},
+            isFullScreen: function () { return false; },
+            quit: function () { try { bridge.quitApp && bridge.quitApp(); } catch (e) {} },
+            captureScreenshot: function () { return Promise.resolve({ ok: false, error: 'unsupported' }); },
+            onWindowFocused: function () { return function () {}; },
+            onWindowUnfocused: function () { return function () {}; }
+        };
+    }
 
     console.log(TAG, 'installed, appData =', appRoot());
 })();
