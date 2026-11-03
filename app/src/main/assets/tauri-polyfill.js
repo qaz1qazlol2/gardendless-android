@@ -2,7 +2,7 @@
  * tauri-polyfill.js —— 为官方客户端 webroot 提供最小 __TAURI_INTERNALS__ 实现
  *
  * 背景：
- *   本仓库官方（Cateners/gardendless-android）配套的游戏包是网页版
+ *   上游（Cateners/gardendless-android）配套的游戏包是网页版
  *   pvzge_web-master，其 index.html 内联了一份 Tauri polyfill。
  *   而本项目使用的游戏包来自官方桌面客户端解包（含 gp-next），页面里没有
  *   任何 polyfill —— 它假定运行在真实 Tauri 壳里。因此这里补一份最小实现：
