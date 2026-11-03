@@ -66,6 +66,20 @@ class GameActivity : AppCompatActivity() {
      * 注入页面的 Tauri shim（assets/gdnext-shim.js）。
      * 前置的 window.__gdForceJsModding 供 shim 决定是否自动启用 JS Modding，见 [FORCE_JS_MODDING]。
      */
+    /**
+     * 注入页面的 Tauri polyfill（assets/tauri-polyfill.js）。
+     * 官方客户端解包出的游戏包不含 polyfill（它假定运行在真实 Tauri 壳里），
+     * 这里补一份最小 __TAURI_INTERNALS__ 实现，必须在游戏脚本之前注入。
+     */
+    private val tauriPolyfillJs: String by lazy {
+        runCatching {
+            assets.open(POLYFILL_ASSET).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrElse { e ->
+            Log.e(TAG, "无法读取 $POLYFILL_ASSET，游戏将无法启动（缺少 __TAURI_INTERNALS__）", e)
+            ""
+        }
+    }
+
     private val gpNextShimJs: String by lazy {
         val js = runCatching {
             assets.open(SHIM_ASSET).bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -93,6 +107,7 @@ class GameActivity : AppCompatActivity() {
         const val PREF_FULLSCREEN = "webview_fullscreen"
         const val TAG = "Gardendless"
         const val SHIM_ASSET = "gdnext-shim.js"
+        const val POLYFILL_ASSET = "tauri-polyfill.js"
         const val GP_NEXT_DIR_NAME = "gp-next"
 
         /**
@@ -281,6 +296,8 @@ class GameActivity : AppCompatActivity() {
                  */
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    // 顺序不可颠倒：polyfill 先提供 __TAURI_INTERNALS__，shim 再在其上包装
+                    if (tauriPolyfillJs.isNotEmpty()) view?.evaluateJavascript(tauriPolyfillJs, null)
                     if (gpNextShimJs.isNotEmpty()) view?.evaluateJavascript(gpNextShimJs, null)
                     val js = """
 (function() {

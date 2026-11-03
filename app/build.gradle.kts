@@ -6,9 +6,12 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+// 签名材料不入库：本地放 keystore.properties（见 keystore.properties.example）即产出
+// 签名 release 包；缺失时 release 走未签名产物，不影响开发构建。
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("keystore.properties")
-if (keystorePropertiesFile.exists()) {
+val hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
@@ -19,21 +22,25 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.fct.gardendless"
+        // 与上游 APK 的 applicationId 区分，避免互相覆盖
+        applicationId = "com.pvzge.mobile"
         minSdk = 27
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.15.0"
+        // versionCode 同时是游戏包解压的版本键（GameActivity），每次发版递增
+        versionCode = 1
+        versionName = "0.16.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-            storePassword = keystoreProperties["storePassword"] as String?
+    if (hasKeystore) {
+        signingConfigs {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String?
+                keyPassword = keystoreProperties["keyPassword"] as String?
+                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+                storePassword = keystoreProperties["storePassword"] as String?
+            }
         }
     }
 
@@ -44,7 +51,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

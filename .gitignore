@@ -15,3 +15,18 @@
 .cxx
 local.properties
 app/src/main/assets/pvzge_web-master.zip
+
+# 游戏资源包（体积大，且不含在本仓库——见 docs/INTEGRATION.md）
+app/src/main/assets/*.zip
+app/src/main/assets/pvzge_web-master/
+
+# 签名材料不入库（上游仓库曾公开签名私钥，本 fork 改用自有密钥）
+keystore.properties
+*.jks
+*.keystore
+
+# 构建产物
+build/
+.gradle/
+local.properties
+.idea/
