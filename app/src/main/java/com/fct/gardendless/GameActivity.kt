@@ -384,9 +384,30 @@ class GameActivity : AppCompatActivity() {
     var q = [];
     var running = false;
 
+    var swallowUp = false;
+
+    function canvasEl() { return document.getElementById("GameCanvas"); }
+
+    /** 落点是否真的在游戏画布上（浮层按钮、gp-next 面板等会盖在上面） */
+    function onCanvas(it) {
+        var c = canvasEl();
+        if (!c) return false;
+        var t = document.elementFromPoint(it.x, it.y);
+        return !!t && (t === c || c.contains(t));
+    }
+
     function dispatch(it) {
-        var el = document.getElementById("GameCanvas") || document.body;
+        var el = canvasEl() || document.body;
         if (!el) return;
+
+        // 按在浮层上的点击不要再喂给游戏（否则点 F9 会顺带点到画布左上角）
+        if (it.t === "mousedown") {
+            if (!onCanvas(it)) { swallowUp = true; return; }
+            swallowUp = false;
+        } else if (it.t === "mouseup") {
+            if (swallowUp) { swallowUp = false; return; }
+        }
+
         try {
             el.dispatchEvent(new MouseEvent(it.t, {
                 view: window,
