@@ -22,13 +22,15 @@ android {
     }
 
     defaultConfig {
-        // 与上游 APK 的 applicationId 区分，避免互相覆盖
-        applicationId = "com.pvzge.mobile"
+        // 与上游 APK 同包名：配合上游签名密钥即可覆盖升级，
+        // 存档 / GP-Next 数据 / 键位原地继承（不同包名 = 不同数据目录，会丢进度）。
+        applicationId = "com.fct.gardendless"
         minSdk = 27
         targetSdk = 36
         // versionCode 同时是游戏包解压的版本键（GameActivity），每次发版递增。
-        // 允许构建期覆盖（闭源仓按游戏包版本注入）：./gradlew -PversionCode=2 -PversionName=0.16.8
-        versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 1
+        // ⚠️ 升级安装要求 versionCode >= 已装版本（上游 v0.15.0 = 13）。
+        // 允许构建期覆盖：./gradlew -PversionCode=20 -PversionName=0.16.8
+        versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 20
         versionName = providers.gradleProperty("versionName").orNull ?: "0.16.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

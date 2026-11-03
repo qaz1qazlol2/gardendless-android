@@ -17,9 +17,9 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 | 游戏包来源 | 网页版 pvzge_web-master（自带 Tauri polyfill） | 官方桌面客户端解包（无 polyfill） |
 | **`tauri-polyfill.js`** | 无 | **新增**：为官方客户端 webroot 提供 `__TAURI_INTERNALS__` 最小实现（fs/path/opener/window/event） |
 | 注入顺序 | shim | **polyfill → shim**（`GameActivity.onPageStarted`） |
-| applicationId | `com.fct.gardendless` | `com.pvzge.mobile`（避免与上游 APK 互相覆盖） |
+| applicationId | `com.fct.gardendless` | 同上（保留原包名，便于覆盖升级并继承存档） |
 | 签名 | 仓库内公开签名私钥 | 私钥不入库，本地 `keystore.properties`（见 example）；缺失时出未签名 release |
-| 版本 | 0.15.x | `versionName` 跟随游戏包（0.16.8），`versionCode` 每次发版递增（也是解压版本键） |
+| 版本 | 0.15.x | `versionName` 跟随游戏包（0.16.8），`versionCode` 每次发版递增（也是解压版本键，须 ≥ 已装版本） |
 
 ## 构建
 
