@@ -12,9 +12,25 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 
 ## 与上游的差异
 
-基线：上游 **v0.15.0**（`0f1c040`，Support mods）。除下表列出的文件外，壳代码
-与其逐字节相同——`gdnext-shim.js`、`GameDocumentsProvider.kt`、
-`AspectRatioFrameLayout.kt` 均未改动，上游后续更新可直接合并。
+基线：上游 **v0.16.31**（`8ca5595`）。已吸收该版本的以下改动：
+
+- 游戏包**内容指纹**（长度 + 首尾 64KB SHA-256）取代 versionCode 判定解压
+- 解压前清空旧目录、zip-slip 防护、解压失败弹窗
+- `plugin:window|is_fullscreen` 走原生桥（`bridge.isFullscreen()`）
+- polyfill/shim 改为**内联进 index.html 的 `<head>`**（`shouldInterceptRequest`），
+  不再用 `onPageStarted` 的 `evaluateJavascript`——游戏在模块顶层求值 `isTauri`，
+  后者时机无法保证
+- `FORCE_JS_MODDING` 恢复为 `false`（跟随上游）
+
+**刻意保留的自有实现**（与上游不同，替换会破坏 gp-next / 存档）：
+
+| 项 | 上游 | 本 fork |
+|---|---|---|
+| `tauri-polyfill.js` | 内存 Map 假文件系统（429 行） | **真文件系统 + `GardendlessBridge` 原生桥**（312 行） |
+| 存档导出 | `dialog.save` 虚拟路径 → `exportText` 桥 | **自有 SAF 导出链**（`pendingExport` + `exportSetName`） |
+| 游戏包路径 | `pvzge_web-master/docs/...` | 同（官方客户端解包结构一致） |
+
+除上表外，壳代码与上游逐字节相同，后续上游更新可继续合并。
 
 | 项 | 上游 | 本 fork |
 |---|---|---|

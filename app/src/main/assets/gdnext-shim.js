@@ -292,6 +292,14 @@
                 return Promise.resolve(null);
             }
 
+            // 不能沿用 polyfill 的 document.fullscreenElement：WebView 对非 video 元素
+            // 不会进入 DOM 全屏，它会恒为 null，导致游戏永远认为自己不在全屏、只进不退。
+            if (name === 'plugin:window|is_fullscreen') {
+                var isFs = false;
+                try { isFs = !!bridge.isFullscreen(); } catch (e) { /* 桥不可用时保持 false */ }
+                return Promise.resolve(isFs);
+            }
+
             return origInvoke.apply(this, arguments);
         };
         console.log(TAG, 'installed, appData =', appDataRoot());

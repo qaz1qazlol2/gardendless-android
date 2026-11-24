@@ -44,6 +44,11 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 import androidx.core.net.toUri
 import org.json.JSONArray
@@ -91,6 +96,76 @@ class GameActivity : AppCompatActivity() {
         if (js.isEmpty()) js else "window.__gdForceJsModding=$FORCE_JS_MODDING;\n$js"
     }
 
+    /**
+     * 计算内置游戏包的内容指纹：压缩包长度 + 首尾各 64KB 的 SHA-256。
+     *
+     * 游戏包有 1.4GB+，每次启动完整读取会明显拖慢冷启动；而 APK 内的 asset 未被压缩时
+     * 可直接定位读写，成本降到毫秒级。若 openFd 不可用（asset 被压缩）或长度未知，
+     * 退回全量 SHA-256，保证不会漏掉更新。
+     *
+     * 相比原先用 versionCode 判断：改资源后如果忘了递增 versionCode，旧判断会静默跳过
+     * 解压，玩家看到的是旧资源；指纹只看内容本身，不依赖版本号纪律。
+     */
+    private fun computeGameAssetFingerprint(): String? {
+        // 优先：直接定位首尾取样
+        val sampled = runCatching {
+            assets.openFd(GAME_ZIP_ASSET).use { afd ->
+                require(afd.length > 0) { "asset length unknown" }
+                val digest = MessageDigest.getInstance("SHA-256")
+                digest.update(ByteBuffer.allocate(8).putLong(afd.length).array())
+                FileInputStream(afd.fileDescriptor).use { fis ->
+                    val channel = fis.channel
+                    digest.update(readAt(channel, afd.startOffset, FINGERPRINT_SAMPLE_BYTES))
+                    val tailPos = (afd.startOffset + afd.length - FINGERPRINT_SAMPLE_BYTES)
+                        .coerceAtLeast(afd.startOffset)
+                    digest.update(readAt(channel, tailPos, FINGERPRINT_SAMPLE_BYTES))
+                }
+                digest.digest().toHex()
+            }
+        }.getOrNull()
+
+        if (sampled != null) return sampled
+
+        // 回退：全量计算
+        return runCatching {
+            assets.open(GAME_ZIP_ASSET).use { input ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    digest.update(buffer, 0, read)
+                }
+                digest.digest().toHex()
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "无法计算游戏包指纹", e)
+            null
+        }
+    }
+
+    private fun readAt(channel: FileChannel, position: Long, size: Int): ByteArray {
+        val buffer = ByteBuffer.allocate(size)
+        channel.position(position)
+        while (buffer.hasRemaining()) {
+            if (channel.read(buffer) < 0) break
+        }
+        return buffer.array().copyOf(buffer.position())
+    }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    /**
+     * 在 HTML 的 `<head>` 起始处插入内容，使其先于页面内所有脚本执行。
+     * 用字符串拼接而非 replace，避免脚本里的 `$` 被当作替换模式。
+     */
+    private fun injectIntoHead(html: String, snippet: String): String {
+        val idx = html.indexOf("<head>", ignoreCase = true)
+        if (idx < 0) return html
+        val insertAt = idx + "<head>".length
+        return html.substring(0, insertAt) + snippet + html.substring(insertAt)
+    }
+
     private val FILE_CHOOSER_RESULT_CODE = 101
     private val EXPORT_SAVE_RESULT_CODE = 102
 
@@ -111,6 +186,16 @@ class GameActivity : AppCompatActivity() {
         const val POLYFILL_ASSET = "tauri-polyfill.js"
         const val GP_NEXT_DIR_NAME = "gp-next"
 
+        /** 内置游戏包与其解压根目录 */
+        const val GAME_ZIP_ASSET = "pvzge_web-master.zip"
+        const val GAME_ROOT_NAME = "pvzge_web-master"
+
+        /** 记录内置游戏包内容的指纹（取代原先依赖 versionCode 的判断） */
+        const val PREF_GAME_FINGERPRINT = "game_asset_fingerprint"
+
+        /** 指纹取样长度：首尾各取一段，避免每次启动完整读取 1.4GB+ 的压缩包 */
+        const val FINGERPRINT_SAMPLE_BYTES = 64 * 1024
+
         /**
          * 是否在启动时自动启用 gp-next 的 JS Modding 开关。
          *
@@ -118,9 +203,9 @@ class GameActivity : AppCompatActivity() {
          * 回调会把 true 还原为 false），唯一入口是控制台的 window.gpNext.mods.enableJsModding()。
          * 移植版没有可用的控制台，因此由 gdnext-shim.js 代为调用一次。
          *
-         * 置为 false 可恢复原行为（需手动从 devtools 开启）。
+         * 跟随上游 v0.16.31 改为 false（恢复原行为，需手动从 devtools 开启）。
          */
-        const val FORCE_JS_MODDING = true
+        const val FORCE_JS_MODDING = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -204,6 +289,15 @@ class GameActivity : AppCompatActivity() {
                 fun setFullscreen(value: Boolean) {
                     webView.post { setWebviewFullscreen(value) }
                 }
+
+                /**
+                 * 供 `plugin:window|is_fullscreen` 查询真实状态。
+                 * WebView 对非 video 元素不会进入 DOM 全屏，document.fullscreenElement 恒为 null，
+                 * 若沿用它游戏会永远认为自己不在全屏，从而只发进入、不发退出。
+                 */
+                @JavascriptInterface
+                fun isFullscreen(): Boolean =
+                    if (::aspectContainer.isInitialized) aspectContainer.fullscreen else false
 
                 @JavascriptInterface
                 fun setExportName(name: String) {
@@ -335,15 +429,15 @@ class GameActivity : AppCompatActivity() {
                     }
                 }
                 /**
-                 * 注入 gp-next shim，并屏蔽 GameCanvas 上的触摸事件
+                 * 屏蔽 GameCanvas 上的触摸事件
                  * （触摸手势统一由 MouseGameWebView 转换为鼠标事件处理）。
-                 * 页面每次加载都会重新注入，shim 内部以 __gdHooked 保证幂等。
+                 *
+                 * polyfill / shim 不在这里注入：它们必须在页面任何脚本之前求值，
+                 * evaluateJavascript 的时机无法保证，改由 shouldInterceptRequest
+                 * 直接把内容塞进 index.html 的 <head>。
                  */
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    // 顺序不可颠倒：polyfill 先提供 __TAURI_INTERNALS__，shim 再在其上包装
-                    if (tauriPolyfillJs.isNotEmpty()) view?.evaluateJavascript(tauriPolyfillJs, null)
-                    if (gpNextShimJs.isNotEmpty()) view?.evaluateJavascript(gpNextShimJs, null)
                     val js = """
 (function() {
     if (window.__gdTouchBlocked) return;
@@ -443,7 +537,27 @@ class GameActivity : AppCompatActivity() {
                     request: WebResourceRequest
                 ): WebResourceResponse? {
                     // 交由 AssetLoader 解析（游戏资源与 /gp-next/ 虚拟路径）
-                    return assetLoader.shouldInterceptRequest(request.url)
+                    val response = assetLoader.shouldInterceptRequest(request.url) ?: return null
+
+                    // 入口页内联注入 polyfill + shim：游戏在模块顶层求值 isTauri，
+                    // 必须早于任何脚本执行，evaluateJavascript 的时机无法保证。
+                    val path = request.url.path ?: return response
+                    if (path != "/" && !path.endsWith("/index.html")) return response
+
+                    val html = runCatching {
+                        response.data?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                    }.getOrNull() ?: return response
+
+                    val payload = buildString {
+                        if (tauriPolyfillJs.isNotEmpty()) append(tauriPolyfillJs).append('\n')
+                        if (gpNextShimJs.isNotEmpty()) append(gpNextShimJs).append('\n')
+                    }
+                    if (payload.isEmpty()) return response
+
+                    val injected = injectIntoHead(html, "<script>\n$payload\n</script>")
+                    return WebResourceResponse(
+                        response.mimeType ?: "text/html", "UTF-8", injected.byteInputStream()
+                    )
                 }
             }
             webView.webChromeClient = object : WebChromeClient() {
@@ -517,8 +631,8 @@ class GameActivity : AppCompatActivity() {
             setupBackNavigation()
         }
 
-        /** 首次安装或版本号变化时，把 assets 中的游戏包解压到 filesDir */
-        fun checkAndExtractAssets(currentVersion: Int) {
+        /** 把 assets 中的游戏包解压到 filesDir（调用前已确认内容与已解压的不一致） */
+        fun checkAndExtractAssets(fingerprint: String?) {
             val progressBar = ProgressBar(this).apply {
                 // 解压总时长不可预知，使用不确定模式
                 isIndeterminate = true
@@ -537,46 +651,76 @@ class GameActivity : AppCompatActivity() {
 
             // 解压在 IO 线程执行，完成后再回主线程启动 WebView
             GlobalScope.launch(Dispatchers.IO) {
+                val gameRoot = File(filesDir, GAME_ROOT_NAME)
                 try {
-                    assets.open("pvzge_web-master.zip").use { inputStream ->
+                    // 先清空旧包：新包可能删除了某些文件，直接覆盖会留下失效残留。
+                    // 目录不存在（首次安装）时 deleteRecursively 会返回 false，故先判存在性
+                    if (gameRoot.exists() && !gameRoot.deleteRecursively()) {
+                        throw IOException("无法清理旧游戏包: ${gameRoot.absolutePath}")
+                    }
+
+                    assets.open(GAME_ZIP_ASSET).use { inputStream ->
                         ZipInputStream(inputStream).use { zis ->
                             var entry = zis.nextEntry
                             while (entry != null) {
-                                val file = File(filesDir, entry.name)
+                                val target = File(filesDir, entry.name).canonicalFile
+                                // 防 zip slip：条目不得逃逸出 filesDir
+                                if (!target.path.startsWith(filesDir.canonicalPath + File.separator)) {
+                                    throw IOException("非法条目: ${entry.name}")
+                                }
                                 if (entry.isDirectory) {
-                                    file.mkdirs()
+                                    target.mkdirs()
                                 } else {
-                                    file.parentFile?.mkdirs()
-                                    file.outputStream().use { zis.copyTo(it) }
+                                    target.parentFile?.mkdirs()
+                                    target.outputStream().use { zis.copyTo(it) }
                                 }
                                 entry = zis.nextEntry
                             }
                         }
                     }
 
-                    // 记录已解压版本，后续启动可直接跳过解压
-                    prefs.edit().putInt("extracted_version", currentVersion).apply()
+                    // 仅在完整解压成功后记录指纹；中途失败则下次启动仍会重试
+                    fingerprint?.let {
+                        prefs.edit().putString(PREF_GAME_FINGERPRINT, it).apply()
+                    }
 
                     withContext(Dispatchers.Main) {
                         dialog.dismiss()
                         setupWebview()
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e(TAG, "游戏包解压失败", e)
                     withContext(Dispatchers.Main) {
                         dialog.dismiss()
+                        MaterialAlertDialogBuilder(this@GameActivity)
+                            .setTitle(R.string.hint)
+                            .setMessage(R.string.extract_failed)
+                            .setPositiveButton(R.string.yes) { _, _ -> finish() }
+                            .show()
                     }
                 }
             }
         }
 
-        // 游戏包版本变化（含首次安装）时重新解压
-        val currentVersion = packageManager.getPackageInfo(packageName, 0).versionCode
+        // 是否需要解压只看内置压缩包内容，与 APK 版本号无关
+        GlobalScope.launch(Dispatchers.IO) {
+            val fingerprint = computeGameAssetFingerprint()
+            val installed = prefs.getString(PREF_GAME_FINGERPRINT, null)
+            val gameRoot = File(filesDir, GAME_ROOT_NAME)
 
-        if (prefs.getInt("extracted_version", 0) != currentVersion) {
-            checkAndExtractAssets(currentVersion)
-        } else {
-            setupWebview()
+            val needExtract = when {
+                // 指纹不可用（asset 异常）时，已有游戏包就沿用，避免每次启动重复解压
+                fingerprint == null -> !gameRoot.exists()
+                else -> fingerprint != installed
+            }
+
+            withContext(Dispatchers.Main) {
+                if (needExtract) {
+                    checkAndExtractAssets(fingerprint)
+                } else {
+                    setupWebview()
+                }
+            }
         }
     }
 
