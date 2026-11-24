@@ -23,7 +23,7 @@ PvZ2 Gardendless 的安卓壳，**fork 自 [Cateners/gardendless-android](https:
 | 注入顺序 | shim | **polyfill → shim**（`GameActivity.onPageStarted`） |
 | applicationId | `com.fct.gardendless` | 同上（保留原包名，便于覆盖升级并继承存档） |
 | 签名 | 仓库内公开签名私钥 | 私钥不入库，本地 `keystore.properties`（见 example）；缺失时出未签名 release |
-| 版本 | 0.15.x | `versionName` 跟随游戏包（0.16.8），`versionCode` 每次发版递增（也是解压版本键，须 ≥ 已装版本） |
+| 版本 | 0.15.x | `versionName` 跟随游戏包（0.16.15），`versionCode` 每次发版递增（也是解压版本键，须 ≥ 已装版本） |
 
 ## 构建
 
